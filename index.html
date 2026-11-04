@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriScan – NDVI Plant Health Monitoring Demo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  body{background:#070b12}
+  .cell{position:relative;aspect-ratio:1/1;cursor:pointer;transition:transform .12s, box-shadow .12s;border-radius:3px;overflow:hidden}
+  .cell:hover{transform:scale(1.12);z-index:5;box-shadow:0 0 0 2px #fff,0 6px 18px rgba(0,0,0,.6)}
+  .cell.selected{box-shadow:0 0 0 3px #22d3ee,0 0 18px #22d3ee;z-index:6;transform:scale(1.1)}
+  .cell.zone-hl{box-shadow:inset 0 0 0 2px rgba(255,255,255,.85)}
+  .cell .layer{position:absolute;inset:0;transition:opacity .35s}
+  .scan::after{content:"";position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#22d3ee,transparent);box-shadow:0 0 14px #22d3ee;animation:scan 3.5s linear infinite;pointer-events:none}
+  @keyframes scan{0%{top:0}100%{top:100%}}
+  input[type=range]{accent-color:#22d3ee}
+  .fade-in{animation:fi .35s ease}
+  @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body class="text-slate-200 font-sans min-h-screen">
+
+<!-- HEADER -->
+<header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-30">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-10 h-10 shrink-0 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-slate-900 text-xl">🛰️</div>
+      <div class="min-w-0">
+        <h1 class="font-bold text-lg sm:text-xl leading-tight truncate">AgriScan <span class="text-emerald-400">NDVI</span> Simulator</h1>
+        <p class="text-xs sm:text-sm text-slate-400 truncate">Precision Agriculture: seeing plant health with Infrared + Visible light</p>
+      </div>
+    </div>
+    <button id="openModal" class="shrink-0 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-sm hover:bg-emerald-500/20 transition">❓ How it works</button>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-6 grid lg:grid-cols-5 gap-6">
+
+  <!-- MAP COLUMN -->
+  <section class="lg:col-span-3 space-y-4">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div>
+          <h2 class="font-semibold">Field Map · 10 × 10 plots</h2>
+          <p class="text-xs text-slate-400">Drone view of a farm. Hover a plot, click to inspect it.</p>
+        </div>
+        <div class="inline-flex rounded-lg overflow-hidden border border-slate-700 text-sm" role="group">
+          <button id="btnRGB" class="px-3 py-1.5">📷 Visible (RGB)</button>
+          <button id="btnNDVI" class="px-3 py-1.5">🌡️ NDVI / NIR</button>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <div class="flex justify-between text-xs text-slate-400 mb-1"><span>Visible Light</span><span>Before ⟷ After</span><span>Infrared NDVI</span></div>
+        <input id="slider" type="range" min="0" max="100" value="0" class="w-full">
+      </div>
+
+      <div id="mapWrap" class="relative rounded-xl overflow-hidden p-2 bg-slate-950 border border-slate-800">
+        <div id="grid" class="grid gap-[3px]" style="grid-template-columns:repeat(10,minmax(0,1fr))"></div>
+      </div>
+
+      <!-- zone chips -->
+      <div id="zoneChips" class="flex flex-wrap gap-2 mt-3 text-xs"></div>
+
+      <!-- legend -->
+      <div class="mt-4">
+        <div id="legendNDVI" class="transition-opacity">
+          <div class="h-3 rounded-full" style="background:linear-gradient(90deg,#7f1d1d,#b45309 25%,#f59e0b 40%,#eab308 52%,#84cc16 68%,#16a34a 82%,#064e2b)"></div>
+          <div class="flex justify-between text-[11px] text-slate-400 mt-1"><span>−1.0 Water/Mud</span><span>0 Bare soil/Dead</span><span>0.3 Stressed</span><span>+1.0 Very healthy</span></div>
+        </div>
+      </div>
+      <p id="modeNote" class="mt-3 text-sm rounded-lg bg-slate-800/60 border border-slate-700 p-3"></p>
+    </div>
+  </section>
+
+  <!-- ANALYTICS PANEL -->
+  <aside class="lg:col-span-2 space-y-4">
+    <div id="empty" class="rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 p-8 text-center text-slate-400">
+      <div class="text-4xl mb-2">👆</div>
+      <p class="font-medium text-slate-300">Select a plot on the map</p>
+      <p class="text-sm">Click any square to see its NDVI score, light reflection and recommended action.</p>
+    </div>
+
+    <div id="panel" class="hidden space-y-4">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 fade-in">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500">Selected · Plot <span id="pCell"></span></p>
+            <h2 id="pName" class="text-xl font-bold"></h2>
+          </div>
+          <span id="pBadge" class="text-xs px-2 py-1 rounded-full border"></span>
+        </div>
+
+        <!-- Gauge -->
+        <div class="mt-4">
+          <div class="flex items-end justify-between">
+            <span class="text-sm text-slate-400">NDVI Score</span>
+            <span id="pNdvi" class="text-3xl font-mono font-bold"></span>
+          </div>
+          <div class="relative h-4 rounded-full mt-2" style="background:linear-gradient(90deg,#7f1d1d,#b45309 25%,#f59e0b 40%,#eab308 52%,#84cc16 68%,#16a34a 82%,#064e2b)">
+            <div id="pMarker" class="absolute -top-1 w-1.5 h-6 bg-white rounded shadow-[0_0_8px_#fff] transition-all duration-500" style="left:50%"></div>
+          </div>
+          <div class="flex justify-between text-[11px] text-slate-500 mt-1"><span>−1.0</span><span>0</span><span>+1.0</span></div>
+          <p class="text-[11px] text-slate-500 mt-2 font-mono">NDVI = (NIR − Red) ÷ (NIR + Red)</p>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 fade-in">
+        <h3 class="font-semibold mb-2">Light Reflection Data</h3>
+        <div class="grid grid-cols-2 gap-3 text-center">
+          <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 p-3">
+            <div class="text-xs text-rose-300">🔴 Red light absorbed</div>
+            <div id="pAbs" class="text-2xl font-bold text-rose-300"></div>
+            <div class="text-[11px] text-slate-400">Reflected: <span id="pRed"></span></div>
+          </div>
+          <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 p-3">
+            <div class="text-xs text-violet-300">🌌 NIR reflected</div>
+            <div id="pNir" class="text-2xl font-bold text-violet-300"></div>
+            <div class="text-[11px] text-slate-400">Invisible to human eyes</div>
+          </div>
+        </div>
+        <div class="h-48 mt-3"><canvas id="chart"></canvas></div>
+        <p id="pWhy" class="text-sm text-slate-300 bg-slate-800/60 border border-slate-700 rounded-lg p-3 mt-3"></p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 fade-in space-y-3">
+        <div>
+          <h3 class="text-xs uppercase tracking-wider text-slate-500">Diagnosis</h3>
+          <p id="pDiag" class="font-semibold text-lg"></p>
+        </div>
+        <div>
+          <h3 class="text-xs uppercase tracking-wider text-slate-500">Recommended action</h3>
+          <p id="pAct" class="text-slate-200"></p>
+        </div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer class="text-center text-xs text-slate-500 py-6">Educational simulation · values are mock data based on typical vegetation spectra</footer>
+
+<!-- MODAL -->
+<div id="modal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-3">
+    <div class="flex justify-between items-center">
+      <h2 class="text-xl font-bold text-emerald-400">How NDVI works</h2>
+      <button id="closeModal" class="text-slate-400 hover:text-white text-xl">✕</button>
+    </div>
+    <p>☀️ Sunlight contains visible light <b>and</b> near-infrared (NIR) light. A camera on a drone or satellite measures how much of each bounces back.</p>
+    <p>🌿 <b>Healthy chlorophyll absorbs red light</b> (used for photosynthesis) and <b>the leaf's cell structure reflects NIR strongly</b> (to avoid overheating). We see green; the sensor sees a huge NIR "glow".</p>
+    <p>🥀 A stressed or dying plant has less chlorophyll (reflects more red) and a collapsing leaf structure (reflects less NIR). The gap shrinks.</p>
+    <div class="rounded-lg bg-slate-800 p-3 font-mono text-center text-emerald-300">NDVI = (NIR − Red) / (NIR + Red)</div>
+    <ul class="text-sm space-y-1 text-slate-300">
+      <li>🟢 <b>0.6 – 1.0</b> dense, healthy vegetation</li>
+      <li>🟡 <b>0.2 – 0.5</b> stressed or sparse plants</li>
+      <li>🟤 <b>−0.1 – 0.1</b> bare soil, dead plants</li>
+      <li>🔴 <b>below 0</b> water, wet mud</li>
+    </ul>
+    <button id="closeModal2" class="w-full mt-2 py-2 rounded-lg bg-emerald-500 text-slate-900 font-semibold">Got it</button>
+  </div>
+</div>
+
+<script>
+/* ---------- ZONE DATA (NIR / Red are % reflected) ---------- */
+const ZONES = {
+  A:{name:"Zone A: Healthy Crop", short:"A · Healthy", nir:85, red:8, rgb:[[46,125,50],[56,142,60],[39,110,45]],
+     badge:"border-emerald-500 text-emerald-300 bg-emerald-500/10",
+     diag:"Optimal Photosynthesis", act:"Maintain current irrigation and fertilizer schedule. Continue weekly monitoring.",
+     why:"Chlorophyll soaks up red light for photosynthesis (only 8% bounces back), while the spongy leaf cells bounce 85% of NIR. Big gap = high NDVI = dark green on the scanner."},
+  B:{name:"Zone B: Drought Stress", short:"B · Drought", nir:40, red:30, rgb:[[160,150,60],[175,160,70],[150,140,55]],
+     badge:"border-amber-500 text-amber-300 bg-amber-500/10",
+     diag:"Water / Nutrient Stress Detected", act:"Increase watering in this sector and test soil nitrogen. Re-scan in 3–5 days.",
+     why:"Thirsty plants lose chlorophyll, so more red light is reflected (30%). Damaged leaf cells reflect less NIR (40%). The gap shrinks, so the map turns yellow/orange – often before our eyes notice any change."},
+  C:{name:"Zone C: Pest Damage", short:"C · Pests", nir:20, red:25, rgb:[[121,85,61],[110,78,55],[135,98,70]],
+     badge:"border-red-500 text-red-300 bg-red-500/10",
+     diag:"Crop Destroyed – Bare-soil signature", act:"Inspect for pests (locusts, borers, fungus) immediately. Apply targeted treatment and consider replanting.",
+     why:"Insects ate or killed the plants, so the sensor sees soil: low NIR (20%) and low red (25%) – almost equal. NDVI falls to ≈ 0 or below, shown as red/brown."},
+  D:{name:"Zone D: Irrigation Leak / Mud", short:"D · Leak/Mud", nir:10, red:14, rgb:[[78,60,45],[66,50,40],[88,68,50]],
+     badge:"border-sky-500 text-sky-300 bg-sky-500/10",
+     diag:"Waterlogging – Possible Pipe Leak", act:"Inspect irrigation lines and valves in this sector. Shut off flow, drain water and avoid root rot.",
+     why:"Water absorbs almost all NIR light (only 10% returns), and wet soil is dark. NDVI becomes clearly negative – a signature of water, not plants."},
+};
+/* zone layout, 10x10 */
+const LAYOUT = [
+ "AAAAAAABBB",
+ "AAAAAAABBB",
+ "AAAAAAABBB",
+ "AAAAAAAABB",
+ "AAAAAAAAAB",
+ "AAAAAAAAAA",
+ "CCCCAAAAAA",
+ "CCCCAAADDD",
+ "CCCCAAADDD",
+ "CCCCAAADDD"
+];
+const SCALE = [[-1,'#7f1d1d'],[-0.1,'#92400e'],[0.0,'#b45309'],[0.15,'#f59e0b'],[0.3,'#eab308'],[0.5,'#84cc16'],[0.7,'#16a34a'],[1,'#064e2b']];
+
+const ndvi = (n,r)=>(n-r)/(n+r);
+const hex2rgb = h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16));
+function ndviColor(v){
+  v=Math.max(-1,Math.min(1,v));
+  for(let i=1;i<SCALE.length;i++){
+    if(v<=SCALE[i][0]){
+      const [a,ca]=SCALE[i-1],[b,cb]=SCALE[i];
+      const t=(v-a)/(b-a),A=hex2rgb(ca),B=hex2rgb(cb);
+      return `rgb(${A.map((x,k)=>Math.round(x+(B[k]-x)*t)).join(',')})`;
+    }
+  }
+  return SCALE[SCALE.length-1][1];
+}
+/* deterministic pseudo-noise so cells vary slightly */
+function rnd(seed){const x=Math.sin(seed*127.1)*43758.5453;return x-Math.floor(x)}
+
+/* ---------- BUILD CELLS ---------- */
+const cells=[];
+LAYOUT.forEach((row,y)=>[...row].forEach((z,x)=>{
+  const id=y*10+x, zone=ZONES[z];
+  const nir = +(zone.nir + (rnd(id+1)-.5)*4).toFixed(0);
+  const red = +(zone.red + (rnd(id+99)-.5)*3).toFixed(0);
+  const rgb = zone.rgb[Math.floor(rnd(id+7)*3)];
+  cells.push({id,x,y,z,nir,red,ndvi:ndvi(nir,red),rgb:`rgb(${rgb.join(',')})`});
+}));
+
+const grid=document.getElementById('grid');
+cells.forEach(c=>{
+  const d=document.createElement('div');
+  d.className='cell'; d.dataset.id=c.id;
+  d.title=`${ZONES[c.z].short}`;
+  d.innerHTML=`<div class="layer" style="background:${c.rgb}"></div><div class="layer ndvi-layer" style="background:${ndviColor(c.ndvi)};opacity:0"></div>`;
+  d.addEventListener('click',()=>select(c.id));
+  d.addEventListener('mouseenter',()=>hlZone(c.z,true));
+  d.addEventListener('mouseleave',()=>hlZone(c.z,false));
+  c.el=d; grid.appendChild(d);
+});
+function hlZone(z,on){cells.forEach(c=>c.el.classList.toggle('zone-hl',on&&c.z===z))}
+
+/* zone chips */
+document.getElementById('zoneChips').innerHTML=Object.entries(ZONES).map(([k,z])=>
+  `<button data-z="${k}" class="chip px-2 py-1 rounded-full border ${z.badge}">${z.short}</button>`).join('');
+document.querySelectorAll('.chip').forEach(b=>{
+  b.onclick=()=>{const first=cells.find(c=>c.z===b.dataset.z);select(first.id)};
+  b.onmouseenter=()=>hlZone(b.dataset.z,true); b.onmouseleave=()=>hlZone(b.dataset.z,false);
+});
+
+/* ---------- VIEW MODE ---------- */
+const slider=document.getElementById('slider');
+const NOTE_RGB="📷 <b>Visible light:</b> this is what your eyes (and a normal camera) see. Stressed plants still look 'sort of green' – problems are hard to spot until it's too late.";
+const NOTE_NDVI="🌡️ <b>NDVI view:</b> the sensor compares NIR vs red. <span class='text-green-400'>Dark green</span> = plants reflecting lots of NIR and absorbing red. <span class='text-yellow-400'>Yellow/orange</span> = stressed. <span class='text-red-400'>Red/brown</span> = bare soil or dead. Hidden problems become obvious!";
+function setView(v){ // v: 0..100
+  slider.value=v;
+  cells.forEach(c=>c.el.querySelector('.ndvi-layer').style.opacity=v/100);
+  document.getElementById('mapWrap').classList.toggle('scan',v>50);
+  document.getElementById('legendNDVI').style.opacity=.3+.7*v/100;
+  document.getElementById('modeNote').innerHTML=v>=50?NOTE_NDVI:NOTE_RGB;
+  const on="bg-emerald-500 text-slate-900 font-semibold", off="bg-slate-800 text-slate-300";
+  document.getElementById('btnRGB').className="px-3 py-1.5 "+(v<50?on:off);
+  document.getElementById('btnNDVI').className="px-3 py-1.5 "+(v>=50?on:off);
+}
+slider.oninput=e=>setView(+e.target.value);
+document.getElementById('btnRGB').onclick=()=>animateTo(0);
+document.getElementById('btnNDVI').onclick=()=>animateTo(100);
+function animateTo(t){
+  let v=+slider.value; const step=t>v?5:-5;
+  const i=setInterval(()=>{v+=step; if((step>0&&v>=t)||(step<0&&v<=t)){v=t;clearInterval(i)} setView(v)},16);
+}
+setView(0);
+
+/* ---------- ANALYTICS ---------- */
+let chart,selected=null;
+function select(id){
+  selected=id; const c=cells[id], z=ZONES[c.z];
+  cells.forEach(k=>k.el.classList.toggle('selected',k.id===id));
+  document.getElementById('empty').classList.add('hidden');
+  const p=document.getElementById('panel'); p.classList.remove('hidden');
+  p.querySelectorAll('.fade-in').forEach(e=>{e.style.animation='none';e.offsetHeight;e.style.animation=''});
+  const v=c.ndvi, $=i=>document.getElementById(i);
+  $('pCell').textContent=`${String.fromCharCode(65+c.y)}${c.x+1}`;
+  $('pName').textContent=z.name;
+  $('pBadge').textContent=z.short; $('pBadge').className='text-xs px-2 py-1 rounded-full border '+z.badge;
+  $('pNdvi').textContent=(v>=0?'+':'')+v.toFixed(2); $('pNdvi').style.color=ndviColor(v<0?v:Math.max(v,0.15)+0.0);
+  $('pMarker').style.left=`calc(${(v+1)/2*100}% - 3px)`;
+  $('pAbs').textContent=(100-c.red)+'%'; $('pRed').textContent=c.red+'%';
+  $('pNir').textContent=c.nir+'%';
+  $('pWhy').innerHTML='💡 <b>Why this color?</b> '+z.why;
+  $('pDiag').textContent=z.diag; $('pAct').textContent=z.act;
+  drawChart(c);
+}
+function drawChart(c){
+  const data=[c.red,c.nir];
+  if(chart){chart.data.datasets[0].data=data;chart.update();return}
+  chart=new Chart(document.getElementById('chart'),{
+    type:'bar',
+    data:{labels:['Red light (visible)','Near-infrared (NIR)'],
+      datasets:[{label:'% reflected',data,backgroundColor:['rgba(244,63,94,.7)','rgba(139,92,246,.7)'],borderColor:['#f43f5e','#8b5cf6'],borderWidth:2,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:600},
+      plugins:{legend:{display:false},title:{display:true,text:'Reflectance: NIR vs Red (%)',color:'#cbd5e1'}},
+      scales:{y:{min:0,max:100,ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}},x:{ticks:{color:'#94a3b8'},grid:{display:false}}}}
+  });
+}
+
+/* ---------- MODAL ---------- */
+const modal=document.getElementById('modal');
+const toggle=s=>modal.classList.toggle('hidden',!s);
+document.getElementById('openModal').onclick=()=>toggle(true);
+document.getElementById('closeModal').onclick=()=>toggle(false);
+document.getElementById('closeModal2').onclick=()=>toggle(false);
+modal.onclick=e=>{if(e.target===modal)toggle(false)};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')toggle(false)});
+</script>
+</body>
+</html>
