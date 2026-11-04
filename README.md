@@ -4,7 +4,8 @@
 
 Aplikasi ini mensimulasikan bagaimana drone dan satelit menggunakan **Cahaya Tampak (RGB)** dan **Inframerah Dekat (Near-Infrared / NIR)** untuk memetakan dan memantau kesehatan tanaman di suatu lahan pertanian secara *real-time*.
 
-![AgriScan Preview](https://via.placeholder.com/1000x500.png?text=Preview+AgriScan+Simulator+Di+Sini) *(Ganti link ini dengan screenshot website kamu nantinya)*
+![AgriScan Preview](<img width="1920" height="1426" alt="screencapture-agrisanndvi-plant-healthy-simulatio-vercel-app-2026-11-04-23_14_28" src="https://github.com/user-attachments/assets/b857d766-07bd-48db-b87c-8416daf6d7f1" />
+) *(Ganti link ini dengan screenshot website kamu nantinya)*
 
 ---
 
@@ -86,13 +87,6 @@ Karena proyek ini adalah *Single Page Application* yang statis, cara menjalankan
 2. Buka folder proyek.
 3. *Double-click* file `agriscan_ndvi_simulator.html` (atau buka langsung menggunakan browser modern seperti Chrome, Firefox, Edge, atau Safari).
 4. Tidak butuh *Node.js* atau *build tools* apapun!
-
----
-
-## 👨‍💻 Kreator & Informasi
-
-*   **Dibuat Oleh:** Hardjuno Indracahya
-*   **Institusi/Sekolah:** SMAN 1 Magelang
 *   **Asisten AI:** Powered by Google Antigravity
 *   **Status Proyek:** Prototipe Edukasi
 
