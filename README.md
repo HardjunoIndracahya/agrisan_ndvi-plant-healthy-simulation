@@ -4,8 +4,7 @@
 
 Aplikasi ini mensimulasikan bagaimana drone dan satelit menggunakan **Cahaya Tampak (RGB)** dan **Inframerah Dekat (Near-Infrared / NIR)** untuk memetakan dan memantau kesehatan tanaman di suatu lahan pertanian secara *real-time*.
 
-![AgriScan Preview](<img width="1920" height="1426" alt="screencapture-agrisanndvi-plant-healthy-simulatio-vercel-app-2026-11-04-23_14_28" src="https://github.com/user-attachments/assets/b857d766-07bd-48db-b87c-8416daf6d7f1" />
-) *(Ganti link ini dengan screenshot website kamu nantinya)*
+![AgriScan Preview](<img width="1920" height="1426" alt="screencapture-agrisanndvi-plant-healthy-simulatio-vercel-app-2026-11-04-23_14_28" src="https://github.com/user-attachments/assets/b857d766-07bd-48db-b87c-8416daf6d7f1" />)
 
 ---
 
